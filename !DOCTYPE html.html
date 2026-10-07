@@ -1,0 +1,607 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>臨床護理：輸血安全互動模擬</title>
+    <!-- 引入 Tailwind CSS (用於排版與美化) -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- 引入 React 與 ReactDOM -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <!-- 引入 Babel (讓瀏覽器能看懂 React JSX 語法) -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <style>
+        /* 避免載入時閃爍 */
+        body { margin: 0; padding: 0; font-family: 'Inter', sans-serif; background-color: #f8fafc; }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect } = React;
+
+        // --- SVG Icons ---
+        const IconDroplet = ({ className }) => (
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className={className}>
+            <path d="M12 2.69l5.66 5.66a8 8 0 11-11.31 0z" />
+          </svg>
+        );
+
+        const IconUserCheck = ({ className }) => (
+          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className={className}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" />
+            <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75" />
+          </svg>
+        );
+
+        const IconClipboard = ({ className }) => (
+          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className={className}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h3.75M9 15h3.75M9 18h3.75m3 .75H18a2.25 2.25 0 002.25-2.25V6.108c0-1.135-.845-2.098-1.976-2.192a48.424 48.424 0 00-1.123-.08m-5.801 0c-.065.21-.1.433-.1.664 0 .414.336.75.75.75h4.5a.75.75 0 00.75-.75 2.25 2.25 0 00-.1-.664m-5.8 0A2.251 2.251 0 0113.5 2.25H15c1.012 0 1.867.668 2.15 1.586m-5.8 0c-.376.023-.75.05-1.124.08C9.095 4.01 8.25 4.973 8.25 6.108V8.25m0 0H4.875c-.621 0-1.125.504-1.125 1.125v11.25c0 .621.504 1.125 1.125 1.125h9.75c.621 0 1.125-.504 1.125-1.125V9.375c0-.621-.504-1.125-1.125-1.125H8.25zM6.75 12h.008v.008H6.75V12zm0 3h.008v.008H6.75V15zm0 3h.008v.008H6.75V18z" />
+          </svg>
+        );
+
+        const IconAlert = ({ className }) => (
+          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className={className}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+          </svg>
+        );
+
+        // --- STREAMING_CHUNK:載入題庫資料 ---
+        const quizData = [
+          {
+            question: "關於輸血同意書的規範，下列敘述何者正確？",
+            options: [
+              "首次輸血一律須取得同意，即使是緊急輸血也不例外。",
+              "緊急輸血可不需同意，由醫師直接決定。",
+              "只要是住院病患，輸血同意書效期可涵蓋所有住院期間，不需更新。",
+              "病患若意識不清，護理師可代為簽署輸血同意書。"
+            ],
+            answer: 1,
+            explanation: "SOP 規定緊急輸血可不需同意，由醫師直接決定。一般首次輸血則需取得同意書。"
+          },
+          {
+            question: "為成人病患準備一般輸血用物時，應選擇何種規格的靜脈留置針最為適當？",
+            options: ["22-24G", "18-20G", "16-18G", "24-26G"],
+            answer: 1,
+            explanation: "成人輸血應使用 18-20G 留置針，避免流速過慢或造成血球破裂溶血；兒童則可使用 22G。"
+          },
+          {
+            question: "護理人員至血庫領取非緊急的一般紅血球血品時，單次領取的數量上限為何？",
+            options: ["無限制，可一次領完醫囑量。", "單次不超過 1 單位紅血球。", "單次不超過 2 單位紅血球。", "單次不超過 4 單位紅血球。"],
+            answer: 2,
+            explanation: "為維持血品品質與溫度，非緊急輸血單次不超過 2 單位紅血球。"
+          },
+          {
+            question: "在開始輸血的「首 15 分鐘」，護理人員應如何設定並觀察滴速？",
+            options: [
+              "直接全開流速以盡快完成輸血。",
+              "滴速設定為不超過 20 滴/分，並密切觀察。",
+              "滴速設定為 40-60 滴/分。",
+              "依病人要求自由調整流速。"
+            ],
+            answer: 1,
+            explanation: "開始輸血首 15 分鐘應密切觀察，滴速不超過 20 滴/分，確認無不良反應後再依醫囑調快。"
+          },
+          {
+            question: "在輸血過程中，若病患突然主訴胸痛、呼吸困難，並伴隨發冷寒顫，第一步處置為何？",
+            options: [
+              "調慢滴速，繼續觀察。",
+              "立即給予退燒藥或抗組織胺。",
+              "立即停止輸血，換上生理食鹽水滴注。",
+              "趕快將剩下的血液擠入體內以結束輸血。"
+            ],
+            answer: 2,
+            explanation: "發生疑似輸血反應時，第一步絕對是「立即停止輸血」，並換上生理食鹽水維持靜脈通暢，隨後通知醫師及血庫。"
+          },
+          {
+            question: "關於靜脈管路的共用與沖洗，下列何種溶液是「唯一」能與血液製品共用的輸液？",
+            options: ["5% 葡萄糖水 (D5W)", "生理食鹽水 (0.9% NaCl)", "乳酸林格氏液 (LR)", "無菌蒸餾水"],
+            answer: 1,
+            explanation: "血液製品嚴禁與葡萄糖液或其他藥物共用（會引起溶血），唯一相容且可用於沖洗管路的只有生理食鹽水。"
+          },
+          {
+            question: "針對意識不清無法配合問答的病患，護理人員在床邊核對身分時，應採取何種方式最適當？",
+            options: [
+              "跳過核對步驟，直接依據病床號碼輸血。",
+              "由家屬、陪同者或以條碼掃描確認。",
+              "僅核對血袋上的血型即可。",
+              "直接看病歷首頁確認。"
+            ],
+            answer: 1,
+            explanation: "當病人意識不清無法配合問答時，應由家屬、陪同者協助確認，或以條碼掃描確認身分。"
+          },
+          {
+            question: "若醫師開立醫囑需在輸血過程中使用「加壓袋」以加快流速，壓力設定上限為何？",
+            options: ["不超過 100 mmHg", "不超過 150 mmHg", "不超過 200 mmHg", "不超過 300 mmHg"],
+            answer: 2,
+            explanation: "非必要不使用加壓袋，若因病情需要使用，壓力絕對不可超過 200 mmHg，以免造成紅血球破裂溶血。"
+          },
+          {
+            question: "病患在輸血進行中，醫師臨時開立了抗生素的靜脈推注醫囑（IV push），護理人員應如何處置？",
+            options: [
+              "將抗生素直接注入血袋中一起輸注。",
+              "暫停輸血，從同一管路推注抗生素後再繼續輸血。",
+              "另建一條靜脈管路來給予抗生素藥物。",
+              "拒絕給藥，等輸血完全結束後再說。"
+            ],
+            answer: 2,
+            explanation: "嚴禁在血品及輸血管路內添加藥物，以防發生凝集或交互作用，應另建一條靜脈管路給藥。"
+          },
+          {
+            question: "輸血順利結束後，關於病歷與系統紀錄的規範，下列何者正確？",
+            options: [
+              "只有發生不良反應才需要寫紀錄。",
+              "只要把空血袋丟棄即可，不需特別紀錄。",
+              "無論是否有不良反應，均須完成輸血回報資料。",
+              "交班給下一班護理師口頭告知即可。"
+            ],
+            answer: 2,
+            explanation: "依據 SOP，輸血後無論是否有不良反應，均須完成「血袋輸血回報」並掃描空袋條碼完成閉環紀錄。"
+          }
+        ];
+
+        // --- STREAMING_CHUNK:初始化元件與狀態 ---
+        function BloodTransfusionGame() {
+          const [unit, setUnit] = useState("");
+          const [empId, setEmpId] = useState("");
+          const [isLoggedIn, setIsLoggedIn] = useState(false);
+          const [currentStep, setCurrentStep] = useState(0);
+          const [message, setMessage] = useState("");
+          const [modalOpen, setModalOpen] = useState(false);
+          
+          // Game interaction states
+          const [inventory, setInventory] = useState([]);
+          const [checks, setChecks] = useState({ name: false, dob: false, bloodType: false, bloodId: false });
+          const [flowRate, setFlowRate] = useState(0);
+          const [isSecondNurseConfirmed, setIsSecondNurseConfirmed] = useState(false);
+          const [selectedSymptoms, setSelectedSymptoms] = useState([]);
+
+          // Quiz interaction states
+          const [isQuizMode, setIsQuizMode] = useState(false);
+          const [currentQ, setCurrentQ] = useState(0);
+          const [score, setScore] = useState(0);
+          const [selectedOption, setSelectedOption] = useState(null);
+          const [showExplanation, setShowExplanation] = useState(false);
+          const [quizFinished, setQuizFinished] = useState(false);
+
+          const patient = { name: "王小明", id: "A123456789", dob: "65/04/01", bloodType: "O+" };
+          const bloodBag = { id: "B123-456-789", type: "Packed RBC", bloodType: "O+", expire: "2026/08/01" };
+
+          const steps = [
+            { title: "醫囑與準備", desc: "確認醫囑及洗手" },
+            { title: "備妥用物", desc: "選擇正確的輸血用物" },
+            { title: "雙人核對", desc: "床邊核對身分與血袋" },
+            { title: "掛血與流速", desc: "開始輸血與滴速控制" },
+            { title: "觀察與衛教", desc: "輸血反應監測" },
+            { title: "完成紀錄", desc: "結束輸血與系統紀錄" }
+          ];
+
+          const showMsg = (msg) => {
+            setMessage(msg);
+            setModalOpen(true);
+          };
+
+          const handleStart = () => {
+            if (!unit.trim() || !empId.trim()) {
+              showMsg("請完整輸入「單位」與「員工代號」以開始測驗！");
+              return;
+            }
+            setIsLoggedIn(true);
+          };
+
+          const handleWashHands = () => {
+            showMsg("手部衛生完成！(已確實遵循洗手法 SOP-1C30-00018)");
+          };
+
+          const toggleInventory = (item) => {
+            if (inventory.includes(item)) {
+              setInventory(inventory.filter(i => i !== item));
+            } else {
+              setInventory([...inventory, item]);
+            }
+          };
+
+          const checkEquipment = () => {
+            const required = ['18-20G留置針', '生理食鹽水', '輸血Set'];
+            const invalid = ['24G留置針 (兒童用/不適用成人輸血)', '葡萄糖液 (禁與血液共用)'];
+            let hasAllRequired = required.every(item => inventory.includes(item));
+            let hasInvalid = invalid.some(item => inventory.includes(item));
+
+            if (hasAllRequired && !hasInvalid) {
+              showMsg("✅ 用物準備完全正確！您已準備好前往床邊進行身分核對。");
+              setCurrentStep(2);
+            } else if (hasInvalid) {
+              showMsg("❌ 警告：選擇了錯誤的用物！\n\n成人輸血應使用 18-20G 留置針。且輸血管路絕對禁止與葡萄糖液共用，避免發生溶血。");
+            } else {
+              showMsg("⚠️ 提示：用物準備不齊全。請再次確認：適當尺寸的留置針、沖洗管路用的輸液、以及專用的輸血套。");
+            }
+          };
+
+          const toggleCheck = (key) => setChecks({ ...checks, [key]: !checks[key] });
+
+          const verifyIdentity = () => {
+            if (checks.name && checks.dob && checks.bloodType && checks.bloodId) {
+              if (!isSecondNurseConfirmed) {
+                showMsg("⚠️ 安全規定：請邀請第二位護理師或醫師進行『雙人核對』並簽章！");
+                return;
+              }
+              showMsg("✅ 雙人核對無誤！\n\n病人意識清楚，已口頭詢問姓名與出生年月日與手圈、血袋完全相符。");
+              setCurrentStep(3);
+            } else {
+              showMsg("⚠️ 請確實核對病人手圈與血袋上的「每一項資訊」並打勾確認！");
+            }
+          };
+
+          const confirmFlowRate = () => {
+            if (flowRate === 0) {
+              showMsg("⚠️ 請設定滴速，不能為 0！");
+            } else if (flowRate > 20) {
+              showMsg(`❌ 錯誤：您設定了 ${flowRate} 滴/分。\n\n開始輸血首 15 分鐘滴速「不超過 20 滴/分」！速度過快無法及時觀察不良反應，請調降。`);
+            } else {
+              showMsg(`✅ 滴速設定正確 (${flowRate} 滴/分)！\n\n您已在床邊密切觀察 15 分鐘，無不良反應，可依醫囑調整後續流速。`);
+              setCurrentStep(4);
+            }
+          };
+
+          const toggleSymptom = (sym) => {
+            if (selectedSymptoms.includes(sym)) {
+              setSelectedSymptoms(selectedSymptoms.filter(s => s !== sym));
+            } else {
+              setSelectedSymptoms([...selectedSymptoms, sym]);
+            }
+          };
+
+          const checkEducation = () => {
+            const correctSymptoms = ['發燒/發冷/寒顫', '皮膚發癢/蕁麻疹', '呼吸困難', '胸痛/噁心嘔吐'];
+            const hasAll = correctSymptoms.every(s => selectedSymptoms.includes(s));
+            if (hasAll) {
+              showMsg("✅ 衛教非常完整！\n\n家屬與病人已充分了解輸血不良反應，且輸血過程中每 30 分鐘都有輕搖血袋，過程一切順利。");
+              setCurrentStep(5);
+            } else {
+              showMsg("⚠️ 請選出「所有」可能的輸血不良反應來衛教病人與家屬，以確保病人安全！");
+            }
+          };
+
+          // --- STREAMING_CHUNK:測驗邏輯 ---
+          const startQuiz = () => { setIsQuizMode(true); window.scrollTo(0, 0); };
+          const handleAnswerSubmit = () => {
+            if (selectedOption === null) { showMsg("⚠️ 請先選擇一個答案！"); return; }
+            setShowExplanation(true);
+            if (selectedOption === quizData[currentQ].answer) setScore(prev => prev + 10);
+          };
+          const nextQuestion = () => {
+            if (currentQ < quizData.length - 1) {
+              setCurrentQ(prev => prev + 1);
+              setSelectedOption(null);
+              setShowExplanation(false);
+              window.scrollTo(0, 0);
+            } else {
+              setQuizFinished(true);
+            }
+          };
+          const completeProcess = () => {
+            setCurrentStep(0); setInventory([]); setChecks({ name: false, dob: false, bloodType: false, bloodId: false });
+            setFlowRate(0); setIsSecondNurseConfirmed(false); setSelectedSymptoms([]);
+            setIsQuizMode(false); setCurrentQ(0); setScore(0); setSelectedOption(null); setShowExplanation(false);
+            setQuizFinished(false); setModalOpen(false); setIsLoggedIn(false); setUnit(""); setEmpId("");
+          };
+
+          // --- STREAMING_CHUNK:渲染畫面 ---
+          return (
+            <div className="min-h-screen bg-slate-50 font-sans text-slate-800 p-2 md:p-8">
+              <div className="max-w-4xl mx-auto bg-white rounded-2xl shadow-xl overflow-hidden">
+                
+                {/* Header */}
+                <div className="bg-red-600 text-white p-5 md:p-6 flex items-center justify-between">
+                  <div>
+                    <h1 className="text-xl md:text-2xl font-bold flex items-center gap-2">
+                      <IconDroplet className="w-6 h-6 md:w-8 md:h-8" />
+                      中國醫藥大學附設醫院<br className="md:hidden" />輸血安全互動模擬
+                    </h1>
+                    <p className="text-red-100 mt-1 text-sm md:text-base">專為臨床新進護理人員設計之 SOP 挑戰</p>
+                  </div>
+                  {isLoggedIn ? (
+                    <div className="hidden md:block text-right bg-red-700 p-3 rounded-lg border border-red-500 shadow-inner">
+                      <div className="text-sm text-red-200">登入人員</div>
+                      <div className="font-bold">{unit} - {empId}</div>
+                    </div>
+                  ) : (
+                    <IconClipboard className="w-10 h-10 md:w-12 md:h-12 opacity-80 hidden md:block" />
+                  )}
+                </div>
+
+                {!isLoggedIn ? (
+                  <div className="p-8 md:p-16 flex flex-col items-center justify-center min-h-[450px] bg-slate-50">
+                    <div className="bg-white p-8 md:p-10 rounded-2xl shadow-lg border border-slate-200 w-full max-w-md">
+                      <div className="text-center mb-8">
+                        <div className="w-20 h-20 bg-red-100 text-red-600 rounded-full flex items-center justify-center mx-auto mb-4 shadow-inner">
+                          <IconUserCheck className="w-10 h-10" />
+                        </div>
+                        <h2 className="text-2xl font-black text-slate-800">人員登入</h2>
+                        <p className="text-slate-500 mt-2">請輸入您的單位與員工代號以開始測驗</p>
+                      </div>
+                      
+                      <div className="space-y-5">
+                        <div>
+                          <label className="block text-sm font-bold text-slate-700 mb-1">單位 (Department)</label>
+                          <input type="text" placeholder="例如：6H、ICU" value={unit} onChange={(e) => setUnit(e.target.value)} className="w-full px-4 py-3 rounded-xl border border-slate-300 focus:ring-2 focus:ring-red-500 outline-none transition-all" />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-bold text-slate-700 mb-1">員工代號 (Employee ID)</label>
+                          <input type="text" placeholder="請輸入員工代號" value={empId} onChange={(e) => setEmpId(e.target.value)} className="w-full px-4 py-3 rounded-xl border border-slate-300 focus:ring-2 focus:ring-red-500 outline-none transition-all" />
+                        </div>
+                        <button onClick={handleStart} className="w-full py-4 bg-red-600 text-white rounded-xl hover:bg-red-700 font-bold text-lg shadow-md mt-4">開始模擬測驗 ➔</button>
+                      </div>
+                    </div>
+                  </div>
+                ) : isQuizMode ? (
+                  <div className="p-4 md:p-8">
+                    {!quizFinished ? (
+                      <div className="max-w-3xl mx-auto">
+                        <div className="flex justify-between items-center mb-6">
+                          <h2 className="text-2xl font-black text-slate-800">課後測驗</h2>
+                          <div className="bg-red-100 text-red-800 px-4 py-2 rounded-full font-bold">第 {currentQ + 1} / {quizData.length} 題</div>
+                        </div>
+                        <div className="bg-white p-6 md:p-8 rounded-2xl border-2 border-slate-200">
+                          <h3 className="text-xl font-bold text-slate-800 mb-6 leading-relaxed">{quizData[currentQ].question}</h3>
+                          <div className="space-y-4">
+                            {quizData[currentQ].options.map((opt, idx) => {
+                              const isSelected = selectedOption === idx;
+                              const isCorrectAnswer = quizData[currentQ].answer === idx;
+                              let optionStyle = "border-slate-200 hover:border-slate-300 hover:bg-slate-50 text-slate-700";
+                              if (showExplanation) {
+                                if (isCorrectAnswer) optionStyle = "border-green-500 bg-green-50 text-green-800";
+                                else if (isSelected && !isCorrectAnswer) optionStyle = "border-red-500 bg-red-50 text-red-800";
+                                else optionStyle = "border-slate-200 opacity-50 text-slate-500";
+                              } else if (isSelected) optionStyle = "border-blue-500 bg-blue-50 text-blue-800 ring-2 ring-blue-200";
+
+                              return (
+                                <button key={idx} onClick={() => !showExplanation && setSelectedOption(idx)} disabled={showExplanation} className={`w-full text-left p-4 rounded-xl border-2 flex items-center gap-4 ${optionStyle}`}>
+                                  <div className={`w-8 h-8 rounded-full border-2 flex items-center justify-center shrink-0 font-bold ${showExplanation && isCorrectAnswer ? "bg-green-500 border-green-500 text-white" : showExplanation && isSelected && !isCorrectAnswer ? "bg-red-500 border-red-500 text-white" : isSelected ? "bg-blue-500 border-blue-500 text-white" : "border-slate-300"}`}>{String.fromCharCode(65 + idx)}</div>
+                                  <span className="font-medium text-lg">{opt}</span>
+                                </button>
+                              );
+                            })}
+                          </div>
+                          {showExplanation && (
+                            <div className="mt-6 p-5 bg-yellow-50 border border-yellow-200 rounded-xl">
+                              <div className="flex items-center gap-2 mb-2">
+                                <span className="text-xl">{selectedOption === quizData[currentQ].answer ? "🎉" : "💡"}</span>
+                                <span className={`font-bold text-lg ${selectedOption === quizData[currentQ].answer ? "text-green-700" : "text-red-700"}`}>{selectedOption === quizData[currentQ].answer ? "答對了！" : "答錯了！"}</span>
+                              </div>
+                              <p className="text-slate-700 font-medium leading-relaxed"><span className="font-bold text-slate-800">解析：</span>{quizData[currentQ].explanation}</p>
+                            </div>
+                          )}
+                          <div className="mt-8 flex justify-end">
+                            {!showExplanation ? (
+                              <button onClick={handleAnswerSubmit} className="px-8 py-4 bg-red-600 text-white rounded-xl hover:bg-red-700 font-bold text-lg w-full md:w-auto">確認送出</button>
+                            ) : (
+                              <button onClick={nextQuestion} className="px-8 py-4 bg-blue-600 text-white rounded-xl hover:bg-blue-700 font-bold text-lg w-full md:w-auto">{currentQ < quizData.length - 1 ? "下一題 ➔" : "查看測驗結果 ➔"}</button>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="max-w-2xl mx-auto text-center py-10">
+                        <div className="w-32 h-32 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-6 border-8 border-white ring-8 ring-slate-50">
+                          <span className="text-5xl font-black text-red-600">{score}</span>
+                        </div>
+                        <h2 className="text-3xl font-black text-slate-800 mb-4">測驗完成！</h2>
+                        <div className={`p-6 rounded-2xl mb-8 ${score >= 80 ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
+                          <p className="text-xl font-bold mb-2">
+                            {score === 100 ? "🏆 滿分！您是輸血安全專家！" : score >= 80 ? "🎉 表現優異！您已掌握大部分的 SOP 知識。" : "💪 還有進步空間！建議重新複習輸血標準作業流程。"}
+                          </p>
+                        </div>
+                        <button onClick={completeProcess} className="px-10 py-4 bg-blue-600 text-white rounded-xl hover:bg-blue-700 font-bold text-lg">結束測驗並回到首頁</button>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <>
+                    {/* Progress Bar */}
+                    <div className="bg-slate-100 p-3 border-b hidden md:block">
+                      <div className="flex justify-between items-center gap-2 max-w-5xl mx-auto">
+                        {steps.map((step, index) => (
+                          <div key={index} className={`flex-1 text-center p-2 rounded-lg text-sm font-bold ${currentStep === index ? 'bg-red-600 text-white shadow-md' : currentStep > index ? 'bg-green-100 text-green-700' : 'bg-slate-200 text-slate-400'}`}>
+                            <div className="mb-1">Step {index + 1}</div>
+                            <div className="text-xs truncate">{step.title}</div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className="p-4 md:p-8">
+                      {/* --- STREAMING_CHUNK:Step 1 --- */}
+                      {currentStep === 0 && (
+                        <div className="space-y-6">
+                          <h2 className="text-xl font-bold border-b-2 border-red-100 pb-2 text-slate-700">Step 1: 醫囑與準備</h2>
+                          <div className="bg-white p-6 rounded-2xl border-2 border-slate-200 flex flex-col md:flex-row gap-6 items-center">
+                            <div className="w-full md:w-2/3 space-y-4">
+                              <div className="bg-yellow-50 p-4 rounded-xl border border-yellow-200 text-slate-800">
+                                <p className="font-bold text-lg mb-2">📋 醫囑確認</p>
+                                <p>病患：{patient.name} (病歷號: {patient.id})</p>
+                                <p>處置：一般輸血 (非緊急)</p>
+                                <p>血品：Packed RBC 2U</p>
+                                <p className="mt-2 text-red-600 font-bold text-sm">已確認：輸血同意書已簽署、第一次輸血已驗血型。</p>
+                              </div>
+                            </div>
+                            <div className="w-full md:w-1/3 flex justify-center">
+                               <button onClick={() => { handleWashHands(); setCurrentStep(1); }} className="px-8 py-4 bg-blue-600 text-white rounded-xl hover:bg-blue-700 font-bold w-full flex flex-col items-center gap-2">
+                                  <span className="text-2xl">🧼</span>執行洗手並開始備物 ➔
+                               </button>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* --- STREAMING_CHUNK:Step 2 --- */}
+                      {currentStep === 1 && (
+                        <div className="space-y-6">
+                          <h2 className="text-xl font-bold border-b-2 border-red-100 pb-2 text-slate-700">Step 2: 備妥用物</h2>
+                          <p className="text-slate-600 bg-slate-50 p-3 rounded-lg">情境：您要為成人病患進行一般輸血（非緊急）。請從下方選擇正確的護理用物：</p>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            {['18-20G留置針', '24G留置針 (兒童用/不適用成人輸血)', '生理食鹽水', '葡萄糖液 (禁與血液共用)', '輸血Set', '加壓袋 (無緊急大量醫囑)'].map((item) => (
+                              <label key={item} className={`p-4 rounded-xl border-2 cursor-pointer flex items-center gap-3 select-none ${inventory.includes(item) ? 'border-red-500 bg-red-50' : 'border-slate-200 bg-white'}`}>
+                                <input type="checkbox" className="w-5 h-5 text-red-600" checked={inventory.includes(item)} onChange={() => toggleInventory(item)} />
+                                <span className={inventory.includes(item) ? 'font-bold text-red-700' : 'text-slate-700 font-medium'}>{item}</span>
+                              </label>
+                            ))}
+                          </div>
+                          <div className="flex justify-end pt-6">
+                            <button onClick={checkEquipment} className="px-8 py-4 bg-red-600 text-white rounded-xl hover:bg-red-700 font-bold w-full sm:w-auto">確認用物，前往領血與核對 ➔</button>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* --- STREAMING_CHUNK:Step 3 --- */}
+                      {currentStep === 2 && (
+                        <div className="space-y-6">
+                          <h2 className="text-xl font-bold border-b-2 border-red-100 pb-2 text-slate-700">Step 3: 雙人核對</h2>
+                          <div className="bg-orange-50 p-4 rounded-xl border border-orange-200 text-slate-800">
+                            <p className="font-bold">⚠️ 安全規定：</p>
+                            <p>必須在「床邊」進行，由兩人（護理師/醫師）確認病人身分，並與血袋標示逐項核對無誤。請勾選確認相符項目。</p>
+                          </div>
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <div className="bg-white p-6 rounded-2xl border-2 border-slate-200 relative overflow-hidden">
+                              <div className="absolute top-0 right-0 bg-blue-100 text-blue-800 text-xs font-bold px-3 py-1 rounded-bl-lg">病人端查對</div>
+                              <h3 className="font-bold text-lg mb-4 text-blue-700">病人手圈 / 詢問</h3>
+                              <div className="space-y-4">
+                                <label className="flex items-center gap-3 p-3 bg-slate-50 rounded-lg cursor-pointer"><input type="checkbox" checked={checks.name} onChange={() => toggleCheck('name')} className="w-5 h-5 accent-red-600" /><div><div className="text-sm text-slate-500">姓名</div><div className="font-bold">{patient.name}</div></div></label>
+                                <label className="flex items-center gap-3 p-3 bg-slate-50 rounded-lg cursor-pointer"><input type="checkbox" checked={checks.dob} onChange={() => toggleCheck('dob')} className="w-5 h-5 accent-red-600" /><div><div className="text-sm text-slate-500">出生年月日</div><div className="font-bold">{patient.dob}</div></div></label>
+                                <label className="flex items-center gap-3 p-3 bg-slate-50 rounded-lg cursor-pointer"><input type="checkbox" checked={checks.bloodType} onChange={() => toggleCheck('bloodType')} className="w-5 h-5 accent-red-600" /><div><div className="text-sm text-slate-500">血型</div><div className="font-bold">{patient.bloodType}</div></div></label>
+                              </div>
+                            </div>
+                            <div className="bg-white p-6 rounded-2xl border-2 border-slate-200 relative overflow-hidden">
+                              <div className="absolute top-0 right-0 bg-red-100 text-red-800 text-xs font-bold px-3 py-1 rounded-bl-lg">血袋端查對</div>
+                              <h3 className="font-bold text-lg mb-4 text-red-700">血袋標籤 / 領血單</h3>
+                              <div className="space-y-4">
+                                <div className="flex items-center gap-3 p-3 bg-slate-50 rounded-lg opacity-80"><div className="w-5 h-5 bg-green-500 rounded text-white flex items-center justify-center text-xs font-bold">✓</div><div><div className="text-sm text-slate-500">對應姓名</div><div className="font-bold">{patient.name}</div></div></div>
+                                <div className="flex items-center gap-3 p-3 bg-slate-50 rounded-lg opacity-80"><div className="w-5 h-5 bg-green-500 rounded text-white flex items-center justify-center text-xs font-bold">✓</div><div><div className="text-sm text-slate-500">對應出生年月日</div><div className="font-bold">{patient.dob}</div></div></div>
+                                <div className="flex items-center gap-3 p-3 bg-slate-50 rounded-lg opacity-80"><div className="w-5 h-5 bg-green-500 rounded text-white flex items-center justify-center text-xs font-bold">✓</div><div><div className="text-sm text-slate-500">血袋血型</div><div className="font-bold">{bloodBag.bloodType}</div></div></div>
+                                <label className="flex items-center gap-3 p-3 bg-red-50 border border-red-100 rounded-lg cursor-pointer"><input type="checkbox" checked={checks.bloodId} onChange={() => toggleCheck('bloodId')} className="w-5 h-5 accent-red-600" /><div><div className="text-sm text-slate-500">血袋號碼</div><div className="font-bold">{bloodBag.id}</div></div></label>
+                              </div>
+                            </div>
+                          </div>
+                          <div className="flex flex-col md:flex-row justify-between items-center gap-4 bg-slate-100 p-5 rounded-2xl mt-6">
+                            <button onClick={() => setIsSecondNurseConfirmed(!isSecondNurseConfirmed)} className={`px-6 py-4 rounded-xl font-bold flex items-center gap-3 w-full md:w-auto ${isSecondNurseConfirmed ? 'bg-green-500 text-white' : 'bg-slate-300 text-slate-700'}`}>
+                              <IconUserCheck className="w-6 h-6" /> {isSecondNurseConfirmed ? "第二護理師已核對簽章 ✓" : "呼叫第二護理師核對"}
+                            </button>
+                            <button onClick={verifyIdentity} className="px-10 py-4 bg-red-600 text-white rounded-xl hover:bg-red-700 font-bold w-full md:w-auto text-lg">確認無誤，執行掛血 ➔</button>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* --- STREAMING_CHUNK:Step 4 --- */}
+                      {currentStep === 3 && (
+                        <div className="space-y-6">
+                          <h2 className="text-xl font-bold border-b-2 border-red-100 pb-2 text-slate-700">Step 4: 掛血與控制流速</h2>
+                          <div className="bg-blue-50 p-4 rounded-xl border border-blue-100 text-slate-700">
+                            <p>已置放 18-20G 留置針，並注意排氣完成。掛血前條碼掃描完成。</p>
+                            <p className="mt-2 text-red-600 font-bold">⚠️ 任務：請設定開始輸血「首 15 分鐘」的正確滴速。</p>
+                          </div>
+                          <div className="flex flex-col md:flex-row items-center gap-10 bg-white p-8 border-2 border-slate-100 rounded-3xl mt-6">
+                            <div className="w-40 h-56 bg-slate-50 border-4 border-slate-300 rounded-b-[40px] rounded-t-xl relative flex flex-col items-center justify-end overflow-visible shrink-0">
+                              <div className="w-full bg-red-600/95 absolute bottom-0 rounded-b-[36px] transition-all" style={{ height: '80%' }}></div>
+                              <div className="z-10 bg-white/95 w-28 p-2 rounded-lg mb-8 text-center text-xs font-bold border-2 border-slate-300 text-slate-800">O+ RBC<br/><span className="text-[10px] text-slate-500">{bloodBag.id}</span></div>
+                              <div className="absolute -bottom-10 w-2 h-12 bg-blue-100 border-x-2 border-slate-300 rounded-b-full"></div>
+                              <div className="absolute -bottom-14 w-5 h-5 text-red-600 z-20" style={{ animation: flowRate > 0 ? `drop ${60 / flowRate}s infinite cubic-bezier(0.4, 0, 0.2, 1)` : 'none', opacity: flowRate > 0 ? 1 : 0 }}>
+                                <IconDroplet className="w-5 h-5" />
+                              </div>
+                            </div>
+                            <div className="flex-1 w-full space-y-8 bg-slate-50 p-6 rounded-2xl border border-slate-100">
+                              <div className="text-center">
+                                <div className="text-5xl font-black text-red-600 mb-2">{flowRate} <span className="text-xl text-slate-500 font-bold">滴/分</span></div>
+                              </div>
+                              <div className="relative pt-6">
+                                <input type="range" min="0" max="60" step="1" value={flowRate} onChange={(e) => setFlowRate(Number(e.target.value))} className="w-full h-4 bg-slate-300 rounded-full appearance-none cursor-pointer accent-red-600" />
+                                <div className="flex justify-between text-sm font-bold text-slate-400 mt-4 px-2"><span>0</span><span className="text-red-500">20 (安全閾值)</span><span>40</span><span>60</span></div>
+                              </div>
+                            </div>
+                          </div>
+                          <div className="flex justify-end pt-8">
+                            <button onClick={confirmFlowRate} className="px-10 py-4 bg-red-600 text-white rounded-xl hover:bg-red-700 font-bold w-full md:w-auto text-lg">鎖定流速，開始觀察 ➔</button>
+                          </div>
+                          <style dangerouslySetInnerHTML={{__html: `@keyframes drop { 0% { transform: translateY(-10px) scale(1); opacity: 1; } 70% { transform: translateY(60px) scale(0.9); opacity: 1; } 100% { transform: translateY(80px) scale(0); opacity: 0; } }`}} />
+                        </div>
+                      )}
+
+                      {/* --- STREAMING_CHUNK:Step 5 --- */}
+                      {currentStep === 4 && (
+                        <div className="space-y-6">
+                          <h2 className="text-xl font-bold border-b-2 border-red-100 pb-2 text-slate-700">Step 5: 觀察與衛教</h2>
+                          <div className="bg-indigo-50 p-5 rounded-2xl border border-indigo-100 text-indigo-900 flex gap-4">
+                            <div className="text-3xl">🕒</div>
+                            <div>
+                              <p className="font-bold text-lg mb-1">15分鐘後，病人生命徵象穩定...</p>
+                              <p className="text-sm">為防止血球沉澱，請記得每 30 分鐘輕搖血袋。</p>
+                            </div>
+                          </div>
+                          <div className="pt-4">
+                            <p className="font-bold text-lg text-slate-800 mb-4 bg-yellow-50 inline-block px-4 py-1 rounded-lg border border-yellow-200">📝 衛教測驗：若出現以下哪些症狀必須立即通知護理人員？（複選）</p>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+                              {['發燒/發冷/寒顫', '精神變好/話變多', '皮膚發癢/蕁麻疹', '血壓突然升高', '呼吸困難', '胸痛/噁心嘔吐'].map((sym) => {
+                                const isWrong = sym === '精神變好/話變多' || sym === '血壓突然升高';
+                                const isSelected = selectedSymptoms.includes(sym);
+                                return (
+                                  <label key={sym} className={`p-4 rounded-xl border-2 cursor-pointer flex items-center gap-3 ${isSelected ? (isWrong ? 'border-red-500 bg-red-50 text-red-700' : 'border-green-500 bg-green-50 text-green-700') : 'bg-white border-slate-200'}`}>
+                                    <input type="checkbox" checked={isSelected} onChange={() => toggleSymptom(sym)} className="hidden" />
+                                    <div className={`w-6 h-6 rounded-md border-2 flex items-center justify-center shrink-0 ${isSelected ? (isWrong ? 'bg-red-500 border-red-500' : 'bg-green-500 border-green-500') : 'border-slate-300'}`}>{isSelected && <span className="text-white text-sm font-bold">✓</span>}</div>
+                                    <span className="font-bold text-[15px]">{sym}</span>
+                                  </label>
+                                )
+                              })}
+                            </div>
+                          </div>
+                          <div className="flex justify-end pt-8">
+                            <button onClick={checkEducation} className="px-10 py-4 bg-red-600 text-white rounded-xl hover:bg-red-700 font-bold w-full md:w-auto text-lg">完成衛教與監測 ➔</button>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* --- STREAMING_CHUNK:Step 6 --- */}
+                      {currentStep === 5 && (
+                        <div className="space-y-6 text-center py-10">
+                          <div className="w-24 h-24 bg-green-100 text-green-600 rounded-full flex items-center justify-center mx-auto mb-6 border-4 border-white ring-4 ring-green-50">
+                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={3} stroke="currentColor" className="w-12 h-12"><path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" /></svg>
+                          </div>
+                          <h2 className="text-3xl font-black text-slate-800 mb-2">輸血 SOP 順利完成！</h2>
+                          
+                          <div className="max-w-md mx-auto text-left bg-slate-50 border border-slate-200 p-6 rounded-2xl mt-8 text-slate-700 space-y-4">
+                            <h3 className="font-bold text-lg border-b pb-2 mb-4">結束輸血重點複習：</h3>
+                            <p>✅ 測量並記錄輸血後生命徵象</p>
+                            <p>✅ 使用生理食鹽水沖洗管路並拔針</p>
+                            <p className="bg-red-50 p-2 rounded-lg text-red-700 font-bold">✅ 完成「血袋輸血回報」與空袋條碼掃描</p>
+                            <p>✅ 執行手部衛生</p>
+                          </div>
+                          
+                          <div className="pt-10">
+                            <button onClick={startQuiz} className="px-10 py-4 bg-blue-600 text-white rounded-xl hover:bg-blue-700 font-bold w-full md:w-auto text-lg">進入課後測驗 ➔</button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </>
+                )}
+              </div>
+
+              {/* Modal Alert */}
+              {modalOpen && (
+                <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+                  <div className="bg-white rounded-3xl p-8 max-w-sm w-full shadow-2xl border border-slate-100">
+                    <h3 className="text-xl font-black mb-4 text-slate-800 flex items-center gap-2"><IconAlert className="w-6 h-6 text-red-600" />系統提示</h3>
+                    <p className="text-slate-600 mb-8 leading-relaxed whitespace-pre-wrap font-medium">{message}</p>
+                    <button onClick={() => setModalOpen(false)} className="w-full py-4 bg-red-600 text-white rounded-xl hover:bg-red-700 font-bold">了解</button>
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        }
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<BloodTransfusionGame />);
+    </script>
+</body>
+</html>
