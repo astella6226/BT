@@ -605,3 +605,18 @@
     </script>
 </body>
 </html>
+// 送出成績給 Google 試算表
+fetch('https://script.google.com/macros/s/AKfycbyqjemcZ_1BPC8X6RBw-loLhohWpVBnz7VMKkIvTnVxkHaGQyj72UX-yqCbHtTbO8VdUg/exec', {
+  method: 'POST',
+  mode: 'no-cors',
+  headers: {
+    'Content-Type': 'application/json'
+  },
+  body: JSON.stringify({
+    unit: unitInput, // 這裡放學員填寫的單位變數
+    id: idInput,     // 這裡放學員填寫的代號變數
+    score: finalScore // 這裡放學員的最終測驗分數
+  })
+}).then(() => {
+  alert("成績已成功送出！指導老師已經收到囉！");
+});
